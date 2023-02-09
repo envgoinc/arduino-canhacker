@@ -75,6 +75,8 @@ class CanHacker {
         bool _isConnected = false;
         Stream *_stream;
         Stream *_debugStream;
+        uint8_t _rxErrorCount;
+        CAN_STATE _state;
 
         enum /*class*/ COMMAND : char {
             COMMAND_SET_BITRATE    = 'S', // set CAN bit rate
@@ -101,6 +103,10 @@ class CanHacker {
 
         ERROR parseTransmit(const char *buffer, int length, struct can_frame *frame);
         ERROR createTransmit(const struct can_frame *frame, char *buffer, const int length);
+        ERROR createErrorStatus(const char error, char *buffer, const int length);
+        ERROR createBusState(const char state, char *buffer, const int length);
+
+        ERROR processError();
 
         uint16_t getTimestamp();
         ERROR setFilter(const uint32_t filter);
