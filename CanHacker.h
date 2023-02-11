@@ -73,10 +73,11 @@ class CanHacker {
         MCP2515 *mcp2515;
         CAN_SPEED bitrate;
         bool _isConnected = false;
-        Stream *_stream;
-        Stream *_debugStream;
         uint8_t _rxErrorCount;
         CAN_STATE _state;
+        Stream *_stream;
+        Stream *_debugStream;
+        uint8_t scratch = 0;
 
         enum /*class*/ COMMAND : char {
             COMMAND_SET_BITRATE    = 'S', // set CAN bit rate
@@ -103,6 +104,7 @@ class CanHacker {
 
         ERROR parseTransmit(const char *buffer, int length, struct can_frame *frame);
         ERROR createTransmit(const struct can_frame *frame, char *buffer, const int length);
+        ERROR checkErrorCounter();
         ERROR createErrorStatus(const char error, char *buffer, const int length);
         ERROR createBusState(const char state, char *buffer, const int length);
 
