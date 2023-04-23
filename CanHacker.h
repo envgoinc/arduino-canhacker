@@ -45,7 +45,7 @@ class CanHacker {
             ERROR_MCP2515_MERRF
         };
 
-        CanHacker(Stream *stream, Stream *debugStream, uint8_t cs);
+        CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint32_t spi_clock = 0);
         ~CanHacker();
         void setClock(const CAN_CLOCK clock);
         ERROR receiveCommand(const char *buffer, const int length);
