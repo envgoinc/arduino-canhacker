@@ -55,7 +55,6 @@ class CanHacker {
         ERROR disableLoopback();
         ERROR pollReceiveCan();
         ERROR receiveCan(const MCP2515::RXBn rxBuffer);
-        MCP2515 *getMcp2515();
         ERROR processInterrupt();
         Stream *getInterfaceStream();
 
