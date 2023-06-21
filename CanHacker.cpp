@@ -34,141 +34,119 @@ static inline void _put_id(char *buf, int end_offset, canid_t id)
 #define put_sff_id(buf, id) _put_id(buf, 2, id)
 #define put_eff_id(buf, id) _put_id(buf, 7, id)
 
-CanHacker::CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint32_t spi_clock) {
+CanHacker::CanHacker(Stream *stream, Stream *debugStream, const int INT_PIN, uint8_t cs, const uint32_t spi_clock) {
     _stream = stream;
     _debugStream = debugStream;
-    _state = BUS_ACTIVE;
-    _rxErrorCount = 0;
-
-    MCP2515::ERROR error;
 
     writeDebugStream(F("Initialization\n"));
 
-    _cs = cs;
     if(spi_clock == 0) {
-        mcp2515 = new MCP2515(_cs);
+      mcp_instance= new MCP2515_CAN(cs);
     } else {
-        mcp2515 = new MCP2515(_cs, spi_clock);
+      mcp_instance = new MCP2515_CAN(cs, spi_clock);
     }
-    error = mcp2515->reset();
-    if(error != MCP2515::ERROR_OK) {
-        writeDebugStream(F("reset error: "));
-        writeDebugStream((int)error);
-        writeDebugStream("\n");
-    }
-    error = mcp2515->setConfigMode();
-    if( error != MCP2515::ERROR_OK) {
-        writeDebugStream(F("set config error: "));
-        writeDebugStream((int)error);
-        writeDebugStream("\n");
-    }
-    error = mcp2515->setClkOut(CLKOUT_DIV1);
-    if( error != MCP2515::ERROR_OK) {
-        writeDebugStream(F("setClkOut: "));
-        writeDebugStream((int)error);
-        writeDebugStream("\n");
-    }
+
+    mcp_instance->begin(INT_PIN); 
+
 }
 
 CanHacker::~CanHacker() {
-    delete mcp2515;
+    delete mcp_instance;
 }
 
 Stream *CanHacker::getInterfaceStream() {
     return _stream;
 }
 
+MCP2515_CAN *CanHacker::get_mcp_instance(){
+  return mcp_instance;
+}
+
 void CanHacker::setClock(CAN_CLOCK clock){
-    canClock = clock;
+    mcp_instance->setClock(clock);
 }
 
 CanHacker::ERROR CanHacker::connectCan() {
-    MCP2515::ERROR error = mcp2515->setBitrate(bitrate, canClock);
-    if (error != MCP2515::ERROR_OK) {
+    mcp_instance->connectCan(); 
+
+    ERROR error = (ERROR)mcp_instance->getError();
+
+    if(error == ERROR_BITRATE){
         writeDebugStream(F("setBitrate error:\n"));
         writeDebugStream((int)error);
         writeDebugStream("\n");
-        return ERROR_MCP2515_INIT_BITRATE;
+        return ERROR_BITRATE;
     }
-
-    if (_loopback) {
-        error = mcp2515->setLoopbackMode();
-    } else if (_listenOnly) {
-        error = mcp2515->setListenOnlyMode();
-    } else {
-        error = mcp2515->setNormalMode();
-    }
-
-    if (error != MCP2515::ERROR_OK) {
+    else if (error == ERROR_SET_MODE) {
         writeDebugStream(F("error setting mode: "));
         writeDebugStream((int)error);
         writeDebugStream("\n");
-        return ERROR_MCP2515_INIT_SET_MODE;
+        return ERROR_SET_MODE;
+    }
+    else if(error != ERROR_OK){
+        writeDebugStream(F("error: "));
+        writeDebugStream((int)error);
+        writeDebugStream("\n");
+        return ERROR_INVALID_COMMAND;
     }
 
-    _isConnected = true;
+    //_isConnected = true;
     return ERROR_OK;
 }
 
 CanHacker::ERROR CanHacker::disconnectCan() {
-    _isConnected = false;
-    mcp2515->setConfigMode();
-    return ERROR_OK;
+    return (ERROR)mcp_instance->disconnectCan();
 }
 
 bool CanHacker::isConnected() {
-    return _isConnected;
+    return mcp_instance->isConnected();
 }
 
-CanHacker::ERROR CanHacker::writeCan(const struct can_frame *frame) {
-    if (mcp2515->sendMessage(frame) != MCP2515::ERROR_OK) {
-        return ERROR_MCP2515_SEND;
-    }
-
-    return ERROR_OK;
-}
-
-CanHacker::ERROR CanHacker::pollReceiveCan() {
-    if (!isConnected()) {
+CanHacker::ERROR CanHacker::writeCan(const struct can_frame &frame) {
+    if (mcp_instance->write(frame)) {
         return ERROR_OK;
     }
 
-    while (mcp2515->checkReceive()) {
-        struct can_frame frame;
-        if (mcp2515->readMessage(&frame) != MCP2515::ERROR_OK) {
-            return ERROR_MCP2515_READ;
-        }
-
-        ERROR error = receiveCanFrame(&frame);
-        if (error != ERROR_OK) {
-            return error;
-        }
-    }
-
-    return ERROR_OK;
+    return ERROR_SEND;
 }
 
-CanHacker::ERROR CanHacker::receiveCan(const MCP2515::RXBn rxBuffer) {
-    if (!isConnected()) {
-        return ERROR_OK;
-    }
+// CanHacker::ERROR CanHacker::pollReceiveCan() {
+//     if (!isConnected()) {
+//         return ERROR_OK;
+//     }
 
-    struct can_frame frame;
-    MCP2515::ERROR result = mcp2515->readMessage(rxBuffer, &frame);
-    if (result == MCP2515::ERROR_NOMSG) {
-        return ERROR_OK;
-    }
+//     while (mcp2515->checkReceive()) {
+//         struct can_frame frame;
+//         if (mcp2515->readMessage(&frame) != MCP2515::ERROR_OK) {
+//             return ERROR_MCP2515_READ;
+//         }
 
-    if (result != MCP2515::ERROR_OK) {
-        return ERROR_MCP2515_READ;
-    }
+//         ERROR error = receiveCanFrame(&frame);
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//     }
 
-    return receiveCanFrame(&frame);
-}
+//     return ERROR_OK;
+// }
 
-MCP2515 *CanHacker::getMcp2515() {
-    return mcp2515;
-}
+// CanHacker::ERROR CanHacker::receiveCan(const MCP2515::RXBn rxBuffer) {
+//     if (!isConnected()) {
+//         return ERROR_OK;
+//     }
+
+//     struct can_frame frame;
+//     MCP2515::ERROR result = mcp2515->readMessage(rxBuffer, &frame);
+//     if (result == MCP2515::ERROR_NOMSG) {
+//         return ERROR_OK;
+//     }
+
+//     if (result != MCP2515::ERROR_OK) {
+//         return ERROR_MCP2515_READ;
+//     }
+
+//     return receiveCanFrame(&frame);
+// }
 
 uint16_t CanHacker::getTimestamp() {
     return millis() % TIMESTAMP_LIMIT;
@@ -191,31 +169,31 @@ CanHacker::ERROR CanHacker::receiveSetBitrateCommand(const char *buffer, const i
     switch(buffer[1]) {
         case '0':
             writeDebugStream(F("Set bitrate 10KBPS\n"));
-            bitrate = CAN_10KBPS;
+            mcp_instance->setBaudRate(CAN_10KBPS);
             break;
         case '1':
             writeDebugStream(F("Set bitrate 20KBPS\n"));
-            bitrate = CAN_20KBPS;
+            mcp_instance->setBaudRate(CAN_20KBPS);
             break;
         case '2':
             writeDebugStream(F("Set bitrate 50KBPS\n"));
-            bitrate = CAN_50KBPS;
+            mcp_instance->setBaudRate(CAN_50KBPS);
             break;
         case '3':
             writeDebugStream(F("Set bitrate 100KBPS\n"));
-            bitrate = CAN_100KBPS;
+            mcp_instance->setBaudRate(CAN_100KBPS);
             break;
         case '4':
             writeDebugStream(F("Set bitrate 125KBPS\n"));
-            bitrate = CAN_125KBPS;
+            mcp_instance->setBaudRate(CAN_125KBPS);
             break;
         case '5':
             writeDebugStream(F("Set bitrate 250KBPS\n"));
-            bitrate = CAN_250KBPS;
+            mcp_instance->setBaudRate(CAN_250KBPS);
             break;
         case '6':
             writeDebugStream(F("Set bitrate 500KBPS\n"));
-            bitrate = CAN_500KBPS;
+            mcp_instance->setBaudRate(CAN_500KBPS);
             break;
         case '7':
             writeDebugStream(F("Bitrate 7 is not supported\n"));
@@ -226,7 +204,7 @@ CanHacker::ERROR CanHacker::receiveSetBitrateCommand(const char *buffer, const i
             break;
         case '8':
             writeDebugStream(F("Set bitrate 1000KBPS\n"));
-            bitrate = CAN_1000KBPS;
+            mcp_instance->setBaudRate(CAN_1000KBPS);
             break;
         default:
             writeDebugStream(F("Unexpected bitrate\n"));
@@ -240,168 +218,168 @@ CanHacker::ERROR CanHacker::receiveSetBitrateCommand(const char *buffer, const i
     return writeStream(CR);
 }
 
-CanHacker::ERROR CanHacker::processInterrupt() {
-    bool msg_received = false;
+// CanHacker::ERROR CanHacker::processInterrupt() {
+//     bool msg_received = false;
 
-    if (!isConnected()) {
-        return ERROR_OK;
-        writeDebugStream(F("Process interrupt while not connected\n"));
-        return ERROR_NOT_CONNECTED;
-    }
+//     if (!isConnected()) {
+//         return ERROR_OK;
+//         writeDebugStream(F("Process interrupt while not connected\n"));
+//         return ERROR_NOT_CONNECTED;
+//     }
 
-    uint8_t irq = mcp2515->getInterrupts();
+//     uint8_t irq = mcp2515->getInterrupts();
 
-    if (irq & MCP2515::CANINTF_ERRIF) {
-        _debugStream->print(F("ERRIF\r\n"));
-        processError();
-        mcp2515->clearERRIF();
-    }
+//     if (irq & MCP2515::CANINTF_ERRIF) {
+//         _debugStream->print(F("ERRIF\r\n"));
+//         processError();
+//         mcp2515->clearERRIF();
+//     }
 
-    if (irq & MCP2515::CANINTF_RX0IF) {
-        ERROR error = receiveCan(MCP2515::RXB0);
-        if (error != ERROR_OK) {
-            return error;
-        } else {
-            msg_received = true;
-        }
-    }
+//     if (irq & MCP2515::CANINTF_RX0IF) {
+//         ERROR error = receiveCan(MCP2515::RXB0);
+//         if (error != ERROR_OK) {
+//             return error;
+//         } else {
+//             msg_received = true;
+//         }
+//     }
 
-    if (irq & MCP2515::CANINTF_RX1IF) {
-        ERROR error = receiveCan(MCP2515::RXB1);
-        if (error != ERROR_OK) {
-            return error;
-        } else {
-            msg_received = true;
-        }
-    }
+//     if (irq & MCP2515::CANINTF_RX1IF) {
+//         ERROR error = receiveCan(MCP2515::RXB1);
+//         if (error != ERROR_OK) {
+//             return error;
+//         } else {
+//             msg_received = true;
+//         }
+//     }
 
-    if (msg_received) {
-        checkErrorCounter();
-    }
+//     if (msg_received) {
+//         checkErrorCounter();
+//     }
 
-    /*if (irq & (MCP2515::CANINTF_TX0IF | MCP2515::CANINTF_TX1IF | MCP2515::CANINTF_TX2IF)) {
-        _debugStream->print("MCP_TXxIF\r\n");
-        //stopAndBlink(1);
-    }*/
+//     /*if (irq & (MCP2515::CANINTF_TX0IF | MCP2515::CANINTF_TX1IF | MCP2515::CANINTF_TX2IF)) {
+//         _debugStream->print("MCP_TXxIF\r\n");
+//         //stopAndBlink(1);
+//     }*/
 
 
-    if (irq & MCP2515::CANINTF_WAKIF) {
-        _debugStream->print(F("MCP_WAKIF\r\n"));
-        mcp2515->clearWAKIF();
-    }
+//     if (irq & MCP2515::CANINTF_WAKIF) {
+//         _debugStream->print(F("MCP_WAKIF\r\n"));
+//         mcp2515->clearWAKIF();
+//     }
 
-    if (irq & MCP2515::CANINTF_MERRF) {
-        _debugStream->print(F("MERRF\r\n"));
-        mcp2515->clearMERR();
-    }
+//     if (irq & MCP2515::CANINTF_MERRF) {
+//         _debugStream->print(F("MERRF\r\n"));
+//         mcp2515->clearMERR();
+//     }
 
-    return ERROR_OK;
-}
+//     return ERROR_OK;
+// }
 
-CanHacker::ERROR CanHacker::checkErrorCounter() {
-    char out[15];
-    ERROR error;
-    const uint8_t errorCount = mcp2515->errorCountRX();
+// CanHacker::ERROR CanHacker::checkErrorCounter() {
+//     char out[15];
+//     ERROR error;
+//     const uint8_t errorCount = mcp2515->errorCountRX();
 
-    // check for an increase in receive error count.  If there is, send
-    // error frame.
-    if(_rxErrorCount != errorCount) {
-        _rxErrorCount = errorCount;
-        error = createErrorStatus('s', out, sizeof(out));
-        if (error != ERROR_OK) {
-            return error;
-        }
-        error = writeStream(out);
-        if (error != ERROR_OK) {
-            return error;
-        }
-    }
-    return ERROR_OK;
-}
+//     // check for an increase in receive error count.  If there is, send
+//     // error frame.
+//     if(_rxErrorCount != errorCount) {
+//         _rxErrorCount = errorCount;
+//         error = createErrorStatus('s', out, sizeof(out));
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//         error = writeStream(out);
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//     }
+//     return ERROR_OK;
+// }
 
-CanHacker::ERROR CanHacker::processError() {
-    uint8_t errFlags = mcp2515->getErrorFlags();
-    char out[15];
-    ERROR error;
-    CAN_STATE state;
-    char state_char;
+// CanHacker::ERROR CanHacker::processError() {
+//     uint8_t errFlags = mcp2515->getErrorFlags();
+//     char out[15];
+//     ERROR error;
+//     CAN_STATE state;
+//     char state_char;
 
-    if (errFlags & (MCP2515::EFLG_RX0OVR | MCP2515::EFLG_RX1OVR)) {
-        mcp2515->clearRXnOVRFlags();
-        error = createErrorStatus('o', out, sizeof(out));
-        if (error != ERROR_OK) {
-            return error;
-        }
-        error = writeStream(out);
-        if (error != ERROR_OK) {
-            return error;
-        }
-    }
+//     if (errFlags & (MCP2515::EFLG_RX0OVR | MCP2515::EFLG_RX1OVR)) {
+//         mcp2515->clearRXnOVRFlags();
+//         error = createErrorStatus('o', out, sizeof(out));
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//         error = writeStream(out);
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//     }
 
-    state = mcp2515->getBusState();
-    if (state != _state) {
-        _state = state;
-        switch (state) {
-            case BUS_ACTIVE:
-                state_char = 'a';
-                break;
-            case BUS_PASSIVE:
-                state_char = 'p';
-                break;
-            case BUS_WARN:
-                state_char = 'w';
-                break;
-            case BUS_OFF:
-                state_char = 'f';
-                break;
-            default:
-                break;
-        }
-        error = createBusState(state_char, out, sizeof(out));
-        if (error != ERROR_OK) {
-            return error;
-        }
-        error = writeStream(out);
-        if (error != ERROR_OK) {
-            return error;
-        }
-    }
-    return ERROR_OK;
-}
+//     state = mcp2515->getBusState();
+//     if (state != _state) {
+//         _state = state;
+//         switch (state) {
+//             case BUS_ACTIVE:
+//                 state_char = 'a';
+//                 break;
+//             case BUS_PASSIVE:
+//                 state_char = 'p';
+//                 break;
+//             case BUS_WARN:
+//                 state_char = 'w';
+//                 break;
+//             case BUS_OFF:
+//                 state_char = 'f';
+//                 break;
+//             default:
+//                 break;
+//         }
+//         error = createBusState(state_char, out, sizeof(out));
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//         error = writeStream(out);
+//         if (error != ERROR_OK) {
+//             return error;
+//         }
+//     }
+//     return ERROR_OK;
+// }
 
-CanHacker::ERROR CanHacker::setFilter(const uint32_t filter) {
-    if (isConnected()) {
-        writeDebugStream(F("Filter cannot be set while connected\n"));
-        return ERROR_CONNECTED;
-    }
+// CanHacker::ERROR CanHacker::setFilter(const uint32_t filter) {
+//     if (isConnected()) {
+//         writeDebugStream(F("Filter cannot be set while connected\n"));
+//         return ERROR_CONNECTED;
+//     }
 
-    MCP2515::RXF filters[] = {MCP2515::RXF0, MCP2515::RXF1, MCP2515::RXF2, MCP2515::RXF3, MCP2515::RXF4, MCP2515::RXF5};
-    for (int i=0; i<6; i++) {
-        MCP2515::ERROR result = mcp2515->setFilter(filters[i], false, filter);
-        if (result != MCP2515::ERROR_OK) {
-            return ERROR_MCP2515_FILTER;
-        }
-    }
+//     MCP2515::RXF filters[] = {MCP2515::RXF0, MCP2515::RXF1, MCP2515::RXF2, MCP2515::RXF3, MCP2515::RXF4, MCP2515::RXF5};
+//     for (int i=0; i<6; i++) {
+//         MCP2515::ERROR result = mcp2515->setFilter(filters[i], false, filter);
+//         if (result != MCP2515::ERROR_OK) {
+//             return ERROR_MCP2515_FILTER;
+//         }
+//     }
 
-    return ERROR_OK;
-}
+//     return ERROR_OK;
+// }
 
-CanHacker::ERROR CanHacker::setFilterMask(const uint32_t mask) {
-    if (isConnected()) {
-        writeDebugStream(F("Filter mask cannot be set while connected\n"));
-        return ERROR_CONNECTED;
-    }
+// CanHacker::ERROR CanHacker::setFilterMask(const uint32_t mask) {
+//     if (isConnected()) {
+//         writeDebugStream(F("Filter mask cannot be set while connected\n"));
+//         return ERROR_CONNECTED;
+//     }
 
-    MCP2515::MASK masks[] = {MCP2515::MASK0, MCP2515::MASK1};
-    for (int i=0; i<2; i++) {
-        MCP2515::ERROR result = mcp2515->setFilterMask(masks[i], false, mask);
-        if (result != MCP2515::ERROR_OK) {
-            return ERROR_MCP2515_FILTER;
-        }
-    }
+//     MCP2515::MASK masks[] = {MCP2515::MASK0, MCP2515::MASK1};
+//     for (int i=0; i<2; i++) {
+//         MCP2515::ERROR result = mcp2515->setFilterMask(masks[i], false, mask);
+//         if (result != MCP2515::ERROR_OK) {
+//             return ERROR_MCP2515_FILTER;
+//         }
+//     }
 
-    return ERROR_OK;
-}
+//     return ERROR_OK;
+// }
 
 CanHacker::ERROR CanHacker::writeStream(const char character) {
     char str[2];
@@ -621,33 +599,33 @@ CanHacker::ERROR CanHacker::parseTransmit(const char *buffer, int length, struct
     return ERROR_OK;
 }
 
-CanHacker::ERROR CanHacker::createBusState(const char state, char *buffer, const int length) {
-    uint16_t i = 0;
-    uint8_t rxErrorCount, txErrorCount;
-    if (length < 10) {
-        return ERROR_BUFFER_OVERFLOW;
-    }
-    rxErrorCount = mcp2515->errorCountRX();
-    txErrorCount = mcp2515->errorCountTX();
-    buffer[i++] = 's';
-    buffer[i++] = state;
-    buffer[i++] = CR;
-    buffer[i] = '\0';
-    return ERROR_OK;
-}
+// CanHacker::ERROR CanHacker::createBusState(const char state, char *buffer, const int length) {
+//     uint16_t i = 0;
+//     uint8_t rxErrorCount, txErrorCount;
+//     if (length < 10) {
+//         return ERROR_BUFFER_OVERFLOW;
+//     }
+//     rxErrorCount = mcp2515->errorCountRX();
+//     txErrorCount = mcp2515->errorCountTX();
+//     buffer[i++] = 's';
+//     buffer[i++] = state;
+//     buffer[i++] = CR;
+//     buffer[i] = '\0';
+//     return ERROR_OK;
+// }
 
-CanHacker::ERROR CanHacker::createErrorStatus(const char error, char *buffer, const int length) {
-    uint16_t i = 0;
-    if (length < 5) {
-        return ERROR_BUFFER_OVERFLOW;
-    }
-    buffer[i++] = 'e';
-    buffer[i++] = '1';
-    buffer[i++] = error;
-    buffer[i++] = CR;
-    buffer[i] = '\0';
-    return ERROR_OK;
-}
+// CanHacker::ERROR CanHacker::createErrorStatus(const char error, char *buffer, const int length) {
+//     uint16_t i = 0;
+//     if (length < 5) {
+//         return ERROR_BUFFER_OVERFLOW;
+//     }
+//     buffer[i++] = 'e';
+//     buffer[i++] = '1';
+//     buffer[i++] = error;
+//     buffer[i++] = CR;
+//     buffer[i] = '\0';
+//     return ERROR_OK;
+// }
 
 CanHacker::ERROR CanHacker::createTransmit(const struct can_frame *frame, char *buffer, const int length) {
     int offset;
@@ -695,7 +673,14 @@ CanHacker::ERROR CanHacker::createTransmit(const struct can_frame *frame, char *
     return ERROR_OK;
 }
 
-CanHacker::ERROR CanHacker::sendFrame(const struct can_frame *frame) {
+CanHacker::ERROR CanHacker::readFrame(struct can_frame &frame){
+  if(mcp_instance->read(frame)){
+    return ERROR_OK;
+  }
+  return ERROR_READ;
+}
+
+CanHacker::ERROR CanHacker::sendFrame(const struct can_frame &frame) {
     return writeCan(frame);
 }
 
@@ -714,9 +699,9 @@ CanHacker::ERROR CanHacker::receiveTransmitCommand(const char *buffer, const int
     if (error != ERROR_OK) {
         return error;
     }
-    error = writeCan(&frame);
-    if (error != ERROR_OK) {
-        return error;
+    bool sent = mcp_instance->write(frame);
+    if (!sent) {
+        return ERROR_SEND;
     }
 
     return writeStream(CR);
@@ -804,6 +789,7 @@ CanHacker::ERROR CanHacker::receiveListenOnlyCommand(const char *buffer, const i
         return ERROR_CONNECTED;
     }
     _listenOnly = true;
+    mcp_instance->setListenOnly(true);
     return writeStream(CR);
 }
 
@@ -831,13 +817,13 @@ CanHacker::ERROR CanHacker::receiveSetAcrCommand(const char *buffer, const int l
         }
     }
 
-    error = setFilter(id);
-    if (error != ERROR_OK) {
-        return error;
+    if(!mcp_instance->setFilter(id)){
+        writeDebugStream(F("Filter cannot be set.\n"));
+        return ERROR_NOT_CONNECTED;
     }
 
     if (beenConnected) {
-        error = connectCan();
+        error = (ERROR)isConnected();
         if (error != ERROR_OK) {
             return error;
         }
@@ -870,7 +856,7 @@ CanHacker::ERROR CanHacker::receiveSetAmrCommand(const char *buffer, const int l
         }
     }
 
-    error = setFilterMask(id);
+    error = (ERROR)mcp_instance->setFilterMask(id);
     if (error != ERROR_OK) {
         return error;
     }
@@ -891,7 +877,7 @@ CanHacker::ERROR CanHacker::enableLoopback() {
         return ERROR_CONNECTED;
     }
 
-    _loopback = true;
+    mcp_instance->enableLoopBack(true);
 
     return ERROR_OK;
 }
@@ -902,7 +888,7 @@ CanHacker::ERROR CanHacker::disableLoopback() {
         return ERROR_CONNECTED;
     }
 
-    _loopback = false;
+    mcp_instance->enableLoopBack(false);
 
     return ERROR_OK;
 }
