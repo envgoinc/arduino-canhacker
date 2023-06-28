@@ -19,19 +19,6 @@ typedef enum RXQUEUE_TABLE {
   RX_SIZE_1024 = (uint16_t)1024
 } RXQUEUE_TABLE;
 
-typedef enum TXQUEUE_TABLE {
-  TX_SIZE_2 = (uint16_t)2,
-  TX_SIZE_4 = (uint16_t)4,
-  TX_SIZE_8 = (uint16_t)8,
-  TX_SIZE_16 = (uint16_t)16,
-  TX_SIZE_32 = (uint16_t)32,
-  TX_SIZE_64 = (uint16_t)64,
-  TX_SIZE_128 = (uint16_t)128,
-  TX_SIZE_256 = (uint16_t)256,
-  TX_SIZE_512 = (uint16_t)512,
-  TX_SIZE_1024 = (uint16_t)1024
-} TXQUEUE_TABLE;
-
 typedef enum CAN_ERROR{
   ERROR_OK,
   ERROR_CONNECTED,
@@ -54,58 +41,27 @@ typedef enum CAN_ERROR{
   ERROR_MCP2515_WAKIF
 }CAN_ERROR;
 
-
 class MCP2515_CAN{
   public:
-    // enum CAN_CLOCK {
-    //   MCP_20MHZ,
-    //   MCP_16MHZ,
-    //   MCP_8MHZ
-    // };
-
-    // typedef enum ERROR {
-    //   ERROR_OK,
-    //   ERROR_CONNECTED,
-    //   ERROR_NOT_CONNECTED,
-    //   ERROR_UNKNOWN_COMMAND,
-    //   ERROR_INVALID_COMMAND,
-    //   ERROR_ERROR_FRAME_NOT_SUPPORTED,
-    //   ERROR_BUFFER_OVERFLOW,
-    //   ERROR_SERIAL_TX_OVERRUN,
-    //   ERROR_LISTEN_ONLY,
-    //   ERROR_MCP2515_INIT,
-    //   ERROR_MCP2515_CONFIG,
-    //   ERROR_MCP2515_BITRATE,
-    //   ERROR_MCP2515_SET_MODE,
-    //   ERROR_MCP2515_SEND,
-    //   ERROR_MCP2515_READ,
-    //   ERROR_MCP2515_FILTER,
-    //   ERROR_MCP2515_ERRIF,
-    //   ERROR_MCP2515_MERRF,
-    //   ERROR_MCP2515_WAKIF
-    // };
-
-    //typedef struct can_frame can_frame;
-    
-
+    typedef struct can_frame can_frame;
 
     // Default buffer sizes are set to 64 and 16. But this can be changed by using constructor in main code.
-    MCP2515_CAN(uint8_t cs, const uint32_t spi_clock = 0, RXQUEUE_TABLE rxSize = RX_SIZE_64, TXQUEUE_TABLE txSize = TX_SIZE_16); // ADDED
-    void begin(const int INT_PIN); // ADDED
-    void setError(CAN_ERROR error); // ADDED
-    CAN_ERROR getError(); // ADDED
-    void setClock(CAN_CLOCK clock); // ADDED
-    void setBaudRate(CAN_SPEED speed); // ADDED
-    bool read(can_frame &CAN_rx_msg); // ADDED
-    bool write(const can_frame &CAN_tx_msg, bool sendMB = false); //ADDED
+    MCP2515_CAN(uint8_t cs, const uint32_t spi_clock = 0, RXQUEUE_TABLE rxSize = RX_SIZE_16);
+    void begin();
+    void setError(CAN_ERROR error);
+    CAN_ERROR getError();
+    void setClock(CAN_CLOCK clock);
+    void setBaudRate(CAN_SPEED speed);
+    bool read(can_frame &CAN_rx_msg);
+    bool write(const can_frame &CAN_tx_msg, bool sendMB = false);
     // Manually set filter and mask parameters
-    bool setFilter(const uint32_t filter);//ADDED
-    bool setFilterMask(const uint32_t mask);//ADDED
-    void setListenOnly(bool listenOnly);//ADDED
-    void enableLoopBack(bool yes = 1); //ADDED 
+    bool setFilter(const uint32_t filter);
+    bool setFilterMask(const uint32_t mask);
+    void setListenOnly(bool listenOnly);
+    void enableLoopBack(bool yes = 1);
     void processInterrupt();
-    CAN_ERROR connectCan(); //ADDED
-    CAN_ERROR disconnectCan(); //ADDED 
+    CAN_ERROR connectCan();
+    CAN_ERROR disconnectCan();
     bool isConnected();
   
     // These are public because these are also used from interrupts.
@@ -117,17 +73,14 @@ class MCP2515_CAN{
     } RingbufferTypeDef;
 
     RingbufferTypeDef rxRing;
-    //RingbufferTypeDef txRing;
 
     bool addToRingBuffer(RingbufferTypeDef &ring, const can_frame &msg);
     bool removeFromRingBuffer(RingbufferTypeDef &ring, can_frame &msg);
 
     volatile can_frame *rx_buffer;
-    //volatile can_frame *tx_buffer;
 
   protected:
     uint16_t sizeRxBuffer;
-    //uint16_t sizeTxBucheckErrorCounterffer;
   
   private:
     MCP2515 *_mcp2515;
@@ -140,7 +93,6 @@ class MCP2515_CAN{
     bool _listenOnly = false;
     bool _loopback = false;
     bool _isConnected = false;
-    bool _bufferOverrun = false;
     uint8_t _rxErrorCount = 0;
     static const char CR  = '\r';
     static const char BEL = 7;

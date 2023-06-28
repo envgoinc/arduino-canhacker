@@ -8,8 +8,11 @@
 #define CANHACKER_H_
 
 #include <can.h>
-//#include <mcp2515.h>
+#include <can_driver_config.h>
 #include <MCP2515_CAN.h>
+
+#ifdef MCP_DRIVER
+#endif
 
 #define CAN_MIN_DLEN 1
 #define HEX_PER_BYTE 2
@@ -25,6 +28,8 @@
 
 class CanHacker {
     public:
+        typedef MCP2515_CAN::can_frame can_message;
+      
         enum ERROR {
             ERROR_OK,
             ERROR_CONNECTED,
@@ -47,18 +52,15 @@ class CanHacker {
             ERROR_WAKIF
         };
 
-        CanHacker(Stream *stream, Stream *debugStream, const int INT_PIN, uint8_t cs, const uint32_t spi_clock = 0);
+        CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint32_t spi_clock = 0);
         ~CanHacker();
         void setClock(const CAN_CLOCK clock);
-        ERROR receiveCommand(const char *buffer, const int length); //stay here
-        ERROR receiveCanFrame(const struct can_frame *frame); //Stay here
-        ERROR sendFrame(const struct can_frame &frame); //Stay here
-        ERROR readFrame(struct can_frame &frame); //Stay here
-        ERROR enableLoopback(); // MCP2515_CAN
-        ERROR disableLoopback();// MCP2515_CAN 
-        //ERROR pollReceiveCan(); // MCP2515_CAN
-        //ERROR receiveCan(const MCP2515::RXBn rxBuffer); // MCP2515_CAN
-        //ERROR processInterrupt(); // MCP2515_CAN
+        ERROR receiveCommand(const char *buffer, const int length);
+        ERROR receiveCanFrame(const can_message *frame);
+        ERROR sendFrame(const can_message &frame);
+        bool readFrame(can_message &frame);
+        ERROR enableLoopback();
+        ERROR disableLoopback();
         Stream *getInterfaceStream();
         MCP2515_CAN *get_mcp_instance();
 
@@ -68,16 +70,11 @@ class CanHacker {
         static const char BEL = 7;
         static const uint16_t TIMESTAMP_LIMIT = 0xEA60;
 
-        //CAN_CLOCK canClock = MCP_16MHZ;
         bool _timestampEnabled = false;
         bool _listenOnly = false;
-        //bool _loopback = false;
-        //uint8_t _cs;
+
         MCP2515_CAN *mcp_instance;
-        //CAN_SPEED bitrate;// MCP2515_CAN
-        //bool _isConnected = false;
-        //uint8_t _rxErrorCount;
-        //CAN_STATE _state;
+
         Stream *_stream;
         Stream *_debugStream;
         uint8_t scratch = 0;
@@ -105,22 +102,15 @@ class CanHacker {
             COMMAND_LISTEN_ONLY    = 'L'  // switch to listen only mode
         };
 
-        ERROR parseTransmit(const char *buffer, int length, struct can_frame *frame);
-        ERROR createTransmit(const struct can_frame *frame, char *buffer, const int length);
-        //ERROR checkErrorCounter();
-        //ERROR createErrorStatus(const char error, char *buffer, const int length);
-        //ERROR createBusState(const char state, char *buffer, const int length);
-
-        //ERROR processError();
+        ERROR parseTransmit(const char *buffer, int length, can_message *frame);
+        ERROR createTransmit(const can_message *frame, char *buffer, const int length);
 
         uint16_t getTimestamp();
-        //ERROR setFilter(const uint32_t filter);
-        //ERROR setFilterMask(const uint32_t mask);
 
         ERROR connectCan();
         ERROR disconnectCan();
         bool isConnected();
-        ERROR writeCan(const struct can_frame &);
+        ERROR writeCan(const can_message &);
         ERROR writeStream(const char character);
         ERROR writeStream(const char *buffer);
         ERROR writeDebugStream(const char character);

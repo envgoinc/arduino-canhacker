@@ -4,16 +4,17 @@
 
 #include "MCP2515_CAN.h"
 
-MCP2515_CAN::MCP2515_CAN(uint8_t cs, const uint32_t spi_clock, RXQUEUE_TABLE rxSize, TXQUEUE_TABLE txSize){
+using namespace std;
+
+MCP2515_CAN::MCP2515_CAN(uint8_t cs, const uint32_t spi_clock, RXQUEUE_TABLE rxSize){
   _cs = cs;
   _state = BUS_ACTIVE;
   _mcp2515 = new MCP2515(_cs, spi_clock);
 
   sizeRxBuffer=rxSize;
-  //sizeTxBuffer=txSize;
 }
 
-void MCP2515_CAN::begin(const int INT_PIN){
+void MCP2515_CAN::begin(){
   MCP2515::ERROR error;
 
   initializeBuffers();
@@ -58,6 +59,7 @@ bool MCP2515_CAN::read(can_frame &CAN_rx_msg){
 }
 
 bool MCP2515_CAN::write(const can_frame &CAN_tx_msg, bool sendMB){
+  (void*) sendMB;
   bool ret = true;
   if (_mcp2515->sendMessage(&CAN_tx_msg) != MCP2515::ERROR_OK) {
       ret = false;
@@ -129,6 +131,7 @@ CAN_ERROR MCP2515_CAN::connectCan(){
 
   _isConnected = true;
   setError(ERROR_OK);
+  return ERROR_OK;
 }
 
 CAN_ERROR MCP2515_CAN::disconnectCan(){
@@ -239,7 +242,7 @@ void MCP2515_CAN::pollReceiveCan(){
   }
 
   while (_mcp2515->checkReceive()) {
-    struct can_frame frame;
+    can_frame frame;
     if (_mcp2515->readMessage(&frame) != MCP2515::ERROR_OK) {
         setError(ERROR_MCP2515_READ);
         return;
@@ -305,10 +308,10 @@ void MCP2515_CAN::processInterrupt(){
 
 CAN_ERROR MCP2515_CAN::receiveCan(const MCP2515::RXBn rxBuffer){
   if (!isConnected()) {
-      return ERROR_OK;
+      return ERROR_NOT_CONNECTED;
   }
 
-  struct can_frame frame;
+  can_frame frame;
   MCP2515::ERROR result = _mcp2515->readMessage(rxBuffer, &frame);
   if (result == MCP2515::ERROR_NOMSG) {
       return ERROR_OK;
@@ -318,6 +321,7 @@ CAN_ERROR MCP2515_CAN::receiveCan(const MCP2515::RXBn rxBuffer){
   }
 
   addToRingBuffer(rxRing, frame);
+  return ERROR_OK;
 }
 
 
@@ -326,9 +330,8 @@ bool MCP2515_CAN::addToRingBuffer(RingbufferTypeDef &ring, const can_frame &msg)
   uint16_t nextEntry = (ring.head + 1) % ring.size;
 
   // check if the ring buffer is full
-  if(nextEntry == ((ring.tail - 1)% ring.size))
+  if(nextEntry == ring.tail)
   {
-    _bufferOverrun = true;
     return(false);
   }
 
@@ -358,13 +361,6 @@ bool MCP2515_CAN::removeFromRingBuffer(RingbufferTypeDef &ring, can_frame &msg){
 
 void MCP2515_CAN::initializeBuffers(void){
     if(isInitialized()) { return; }
-
-    // set up the transmit and receive ring buffers
-    // if(tx_buffer==0)
-    // {
-    //   tx_buffer = new can_frame[sizeTxBuffer];
-    // }
-    // initRingBuffer(txRing, tx_buffer, sizeTxBuffer);
 
     if(rx_buffer==0)
     {
