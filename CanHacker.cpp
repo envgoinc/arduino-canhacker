@@ -40,36 +40,43 @@ CanHacker::CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint
 
     writeDebugStream(F("Initialization\n"));
 
+    #ifdef MCP_DRIVER
     if(spi_clock == 0) {
-      mcp_instance= new MCP2515_CAN(cs);
+      can_instance = new MCP_CAN(cs);
     } else {
-      mcp_instance = new MCP2515_CAN(cs, spi_clock);
+      can_instance = new MCP_CAN(cs, spi_clock);
     }
+    #endif /* MCP_DRIVER */
 
-    mcp_instance->begin(); 
+    #ifdef STM_DRIVER
+    can_instance = new STM_CAN(CAN2, STM_CAN::ALT);
+    #endif /* STM_DRIVER */
+
+
+    can_instance->begin(); 
 
 }
 
 CanHacker::~CanHacker() {
-    delete mcp_instance;
+    delete can_instance;
 }
 
 Stream *CanHacker::getInterfaceStream() {
     return _stream;
 }
 
-MCP2515_CAN *CanHacker::get_mcp_instance(){
-  return mcp_instance;
+BASE_CAN *CanHacker::get_can_instance(){
+  return can_instance;
 }
 
-void CanHacker::setClock(CAN_CLOCK clock){
-    mcp_instance->setClock(clock);
+void CanHacker::setClock(BASE_CAN::CAN_CLOCK clock){
+    can_instance->setClock(clock);
 }
 
 CanHacker::ERROR CanHacker::connectCan() {
-    mcp_instance->connectCan(); 
+    can_instance->connectCan(); 
 
-    ERROR error = (ERROR)mcp_instance->getError();
+    ERROR error = (ERROR)can_instance->getError();
 
     if(error == ERROR_BITRATE){
         writeDebugStream(F("setBitrate error:\n"));
@@ -94,15 +101,15 @@ CanHacker::ERROR CanHacker::connectCan() {
 }
 
 CanHacker::ERROR CanHacker::disconnectCan() {
-    return (ERROR)mcp_instance->disconnectCan();
+    return (ERROR)can_instance->disconnectCan();
 }
 
 bool CanHacker::isConnected() {
-    return mcp_instance->isConnected();
+    return can_instance->isConnected();
 }
 
 CanHacker::ERROR CanHacker::writeCan(const can_message &frame) {
-    if (mcp_instance->write(frame)) {
+    if (can_instance->write(frame)) {
         return ERROR_OK;
     }
 
@@ -130,31 +137,31 @@ CanHacker::ERROR CanHacker::receiveSetBitrateCommand(const char *buffer, const i
     switch(buffer[1]) {
         case '0':
             writeDebugStream(F("Set bitrate 10KBPS\n"));
-            mcp_instance->setBaudRate(CAN_10KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_10KBPS);
             break;
         case '1':
             writeDebugStream(F("Set bitrate 20KBPS\n"));
-            mcp_instance->setBaudRate(CAN_20KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_20KBPS);
             break;
         case '2':
             writeDebugStream(F("Set bitrate 50KBPS\n"));
-            mcp_instance->setBaudRate(CAN_50KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_50KBPS);
             break;
         case '3':
             writeDebugStream(F("Set bitrate 100KBPS\n"));
-            mcp_instance->setBaudRate(CAN_100KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_100KBPS);
             break;
         case '4':
             writeDebugStream(F("Set bitrate 125KBPS\n"));
-            mcp_instance->setBaudRate(CAN_125KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_125KBPS);
             break;
         case '5':
             writeDebugStream(F("Set bitrate 250KBPS\n"));
-            mcp_instance->setBaudRate(CAN_250KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_250KBPS);
             break;
         case '6':
             writeDebugStream(F("Set bitrate 500KBPS\n"));
-            mcp_instance->setBaudRate(CAN_500KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_500KBPS);
             break;
         case '7':
             writeDebugStream(F("Bitrate 7 is not supported\n"));
@@ -165,7 +172,7 @@ CanHacker::ERROR CanHacker::receiveSetBitrateCommand(const char *buffer, const i
             break;
         case '8':
             writeDebugStream(F("Set bitrate 1000KBPS\n"));
-            mcp_instance->setBaudRate(CAN_1000KBPS);
+            can_instance->setBaudRate(BASE_CAN::CAN_1000KBPS);
             break;
         default:
             writeDebugStream(F("Unexpected bitrate\n"));
@@ -444,7 +451,7 @@ CanHacker::ERROR CanHacker::createTransmit(const can_message *frame, char *buffe
 }
 
 bool CanHacker::readFrame(can_message &frame){
-  if(mcp_instance->read(frame)){
+  if(can_instance->read(frame)){
     return true;
   }
   return false;
@@ -469,7 +476,7 @@ CanHacker::ERROR CanHacker::receiveTransmitCommand(const char *buffer, const int
     if (error != ERROR_OK) {
         return error;
     }
-    bool sent = mcp_instance->write(frame);
+    bool sent = can_instance->write(frame);
     if (!sent) {
         return ERROR_SEND;
     }
@@ -559,7 +566,7 @@ CanHacker::ERROR CanHacker::receiveListenOnlyCommand(const char *buffer, const i
         return ERROR_CONNECTED;
     }
     _listenOnly = true;
-    mcp_instance->setListenOnly(true);
+    can_instance->setListenOnly(true);
     return writeStream(CR);
 }
 
@@ -587,7 +594,7 @@ CanHacker::ERROR CanHacker::receiveSetAcrCommand(const char *buffer, const int l
         }
     }
 
-    if(!mcp_instance->setFilter(id)){
+    if(!can_instance->setFilter(id)){
         writeDebugStream(F("Filter cannot be set.\n"));
         return ERROR_NOT_CONNECTED;
     }
@@ -626,7 +633,7 @@ CanHacker::ERROR CanHacker::receiveSetAmrCommand(const char *buffer, const int l
         }
     }
 
-    error = (ERROR)mcp_instance->setFilterMask(id);
+    error = (ERROR)can_instance->setFilterMask(id);
     if (error != ERROR_OK) {
         return error;
     }
@@ -647,7 +654,7 @@ CanHacker::ERROR CanHacker::enableLoopback() {
         return ERROR_CONNECTED;
     }
 
-    mcp_instance->enableLoopBack(true);
+    can_instance->enableLoopBack(true);
 
     return ERROR_OK;
 }
@@ -658,7 +665,7 @@ CanHacker::ERROR CanHacker::disableLoopback() {
         return ERROR_CONNECTED;
     }
 
-    mcp_instance->enableLoopBack(false);
+    can_instance->enableLoopBack(false);
 
     return ERROR_OK;
 }

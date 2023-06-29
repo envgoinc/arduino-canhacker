@@ -9,10 +9,15 @@
 
 #include <can.h>
 #include <can_driver_config.h>
-#include <MCP2515_CAN.h>
+#include <common_can.h>
 
 #ifdef MCP_DRIVER
-#endif
+#include <MCP_CAN.h>
+#endif /* MCP_DRIVER */
+
+#ifdef STM_DRIVER
+#include <STM_CAN.h>
+#endif /* STM_DRIVER */
 
 #define CAN_MIN_DLEN 1
 #define HEX_PER_BYTE 2
@@ -54,7 +59,7 @@ class CanHacker {
 
         CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint32_t spi_clock = 0);
         ~CanHacker();
-        void setClock(const CAN_CLOCK clock);
+        void setClock(const BASE_CAN::CAN_CLOCK clock);
         ERROR receiveCommand(const char *buffer, const int length);
         ERROR receiveCanFrame(const can_message *frame);
         ERROR sendFrame(const can_message &frame);
@@ -62,7 +67,7 @@ class CanHacker {
         ERROR enableLoopback();
         ERROR disableLoopback();
         Stream *getInterfaceStream();
-        MCP2515_CAN *get_mcp_instance();
+        BASE_CAN *get_can_instance();
 
     private:
 
@@ -73,7 +78,7 @@ class CanHacker {
         bool _timestampEnabled = false;
         bool _listenOnly = false;
 
-        MCP2515_CAN *mcp_instance;
+        BASE_CAN *can_instance;
 
         Stream *_stream;
         Stream *_debugStream;
