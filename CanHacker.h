@@ -33,7 +33,7 @@
 
 class CanHacker {
     public:
-        typedef MCP2515_CAN::can_frame can_message;
+        typedef BASE_CAN::can_frame can_message;
       
         enum ERROR {
             ERROR_OK,
@@ -78,7 +78,7 @@ class CanHacker {
         bool _timestampEnabled = false;
         bool _listenOnly = false;
 
-        BASE_CAN *can_instance;
+        BASE_CAN *can_instance = nullptr;
 
         Stream *_stream;
         Stream *_debugStream;
