@@ -8,16 +8,9 @@
 #define CANHACKER_H_
 
 #include <can.h>
-#include <can_driver_config.h>
 #include <common_can.h>
-
-#ifdef MCP_DRIVER
 #include <MCP_CAN.h>
-#endif /* MCP_DRIVER */
-
-#ifdef STM_DRIVER
 #include <STM_CAN.h>
-#endif /* STM_DRIVER */
 
 #define CAN_MIN_DLEN 1
 #define HEX_PER_BYTE 2
@@ -34,7 +27,7 @@
 class CanHacker {
     public:
         typedef BASE_CAN::can_frame can_message;
-      
+
         enum ERROR {
             ERROR_OK,
             ERROR_CONNECTED,
@@ -58,6 +51,7 @@ class CanHacker {
         };
 
         CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint32_t spi_clock = 0);
+        CanHacker(Stream *stream, Stream *debugStream, BASE_CAN *can);
         ~CanHacker();
         void setClock(const BASE_CAN::CAN_CLOCK clock);
         ERROR receiveCommand(const char *buffer, const int length);

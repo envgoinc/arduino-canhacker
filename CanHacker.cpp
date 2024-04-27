@@ -40,21 +40,25 @@ CanHacker::CanHacker(Stream *stream, Stream *debugStream, uint8_t cs, const uint
 
     writeDebugStream(F("Initialization\n"));
 
-    #ifdef MCP_DRIVER
     if(spi_clock == 0) {
       can_instance = new MCP_CAN(cs);
     } else {
       can_instance = new MCP_CAN(cs, spi_clock);
     }
-    #endif /* MCP_DRIVER */
-
-    #ifdef STM_DRIVER
-    can_instance = new STM_CAN(CAN2, STM_CAN::ALT);
-    #endif /* STM_DRIVER */
-
 
     can_instance->begin();
 
+}
+
+CanHacker::CanHacker(Stream *stream, Stream *debugStream, BASE_CAN *can) {
+    _stream = stream;
+    _debugStream = debugStream;
+
+    writeDebugStream(F("Initialization\n"));
+
+    can_instance = can;
+
+    can_instance->begin();
 }
 
 CanHacker::~CanHacker() {
