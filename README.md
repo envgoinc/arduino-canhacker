@@ -1,6 +1,18 @@
 # CanHacker (lawicel) CAN adapter on Arduino + MCP2515
 
+
+## enVgo Library Structure and Flow 
+![](./CanHacker_updated_structure.png)
+
+
+## enVgo Driver Configuration
+
+To configure if MCP2515 or STM32 driver should be used, uncomment/comment the respective lines in `can_driver_config.h`
+
+
 Use that [Library](https://github.com/autowp/arduino-mcp2515) to communicate with MCP2515
+
+---
 
 ## Features
 
